@@ -1,93 +1,117 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Runtime.InteropServices.WindowsRuntime;
-using Windows.Foundation;
-using Windows.Foundation.Collections;
-using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
-using Windows.UI.Xaml.Controls.Primitives;
-using Windows.UI.Xaml.Data;
-using Windows.UI.Xaml.Input;
-using Windows.UI.Xaml.Media;
-using Windows.UI.Xaml.Navigation;
 using Windows.UI.Input.Inking;
-using Windows.Media.Ocr;
-using Windows.ApplicationModel;
 using Windows.Globalization;
-using Windows.Graphics.Imaging;
 using Windows.UI.Text.Core;
 using Windows.UI.Popups;
-using Windows.UI.Xaml.Documents;
+using Newtonsoft.Json;
+using System.IO;
+using Windows.UI.Xaml;
 
 // The Blank Page item template is documented at http://go.microsoft.com/fwlink/?LinkId=402352&clcid=0x409
 
 namespace GanaStudy
 {
-    /// <summary>
-    /// An empty page that can be used on its own or navigated to within a Frame.
-    /// </summary>
     public sealed partial class MainPage : Page
     {
-        private MainPage rootPage;
-        InkRecognizerContainer inkRecognizerContainer = null;
-        private IReadOnlyList<InkRecognizer> recoView = null;
-        private Language previousInputLanguage = null;
-        private CoreTextServicesManager textServiceManager = null;
-        private ToolTip recoTooltip;
-        private InkRecognizer japrecog;
+        List<Character> Hiragana;
+        List<Character> Katagana;
         public MainPage()
         {
-            this.InitializeComponent();
-            rootPage = this;
-            Gana.InkPresenter.InputDeviceTypes =
-                Windows.UI.Core.CoreInputDeviceTypes.Mouse |
-                Windows.UI.Core.CoreInputDeviceTypes.Pen;
-            InkDrawingAttributes drawingAttributes = new InkDrawingAttributes();
-            Gana.InkPresenter.StrokesCollected += InkPresenter_StrokesCollected;
-            drawingAttributes.Color = Windows.UI.Colors.Black;
-            drawingAttributes.IgnorePressure = false;
-            drawingAttributes.FitToCurve = true;
-            Gana.InkPresenter.UpdateDefaultDrawingAttributes(drawingAttributes);
-            inkRecognizerContainer = new InkRecognizerContainer();
-            recoView = inkRecognizerContainer.GetRecognizers();
-            if (recoView.Count() > 0)
+            try
             {
-                foreach (InkRecognizer recognizer in recoView)
+                InitializeComponent();
+                Hiragana = new List<Character>();
+                Katagana = new List<Character>();
+                if (!(File.Exists(Directory.GetCurrentDirectory() + @"/kata") && File.Exists(Directory.GetCurrentDirectory() + @"/hira")))
                 {
-                    if (recognizer.Name == "Microsoft 日本語手書き認識エンジン")
-                    {
-                        inkRecognizerContainer.SetDefaultRecognizer(recognizer);
-                    }
+                    SetupGana();
                 }
-            }
-            else
+                else
+                {
+                    LoadGana();
+                }
+                GanaList.Width = this.Width;
+                int CharactersPerLine = (int)(GanaList.Width / 100);
+                
+                int i = 0;
+                int lines = -1;
+                foreach(Character gana in Hiragana)
+                {
+                    if(i == CharactersPerLine || i == 0)
+                    {
+                        RowDefinition newrow = new RowDefinition();
+                        newrow.Height = new GridLength(1, GridUnitType.Star);
+                        GanaList.RowDefinitions.Add(newrow);
+                        lines++;
+                        i = 0;
+                    }
+                    ColumnDefinition newcol = new ColumnDefinition();
+                    newcol.Width = new GridLength(1, GridUnitType.Star);
+                    GanaList.ColumnDefinitions.Add(newcol);
+                    CheckBox checkbox = new CheckBox();
+                    checkbox.Content = gana.Gana;
+                    checkbox.Width = 200;
+                    checkbox.HorizontalAlignment = HorizontalAlignment.Stretch;
+                    checkbox.VerticalAlignment = VerticalAlignment.Stretch;
+                    GanaList.Children.Add(checkbox);
+                    Grid.SetRow(checkbox,lines);
+                    Grid.SetColumn(checkbox, i);
+                    i++;
+
+                }
+            } catch(Exception ex)
             {
-                var dialog = new MessageDialog("Please Install Japanese Handwriting");
-                MessageBox(dialog);
+                System.Diagnostics.Debug.WriteLine(ex.ToString());
             }
+            
         }
-        private async void InkPresenter_StrokesCollected(InkPresenter sender, InkStrokesCollectedEventArgs args)
+        private void LoadGana()
         {
-            IReadOnlyList<InkStroke> currentStrokes = Gana.InkPresenter.StrokeContainer.GetStrokes();
-            if (currentStrokes.Count > 0)
+            string jsonkatagana = File.ReadAllText(Directory.GetCurrentDirectory() + @"/kata");
+            string jsonhiragana = File.ReadAllText(Directory.GetCurrentDirectory() + @"/hira");
+            Katagana = JsonConvert.DeserializeObject<List<Character>>(jsonkatagana);
+            Hiragana = JsonConvert.DeserializeObject<List<Character>>(jsonhiragana);
+        }
+        private void SetupGana()
+        {
+            // Simple CSV Data with Hira-/Katagana and Romaji
+            #region romaji
+            string sRomajiCSV = "a,i,u,e,o,ka,ki,ku,ke,ko,sa,si,su,se,so,ta,ti,tu,te,to,na,ni,nu,ne,no,ha,hi,hu,he,ho,ma,mi,mu,me,mo,ya,yu,yo,ra,ri,ru,re,ro,wa,wo,n";
+            string[] aRomaji = sRomajiCSV.Split(',');
+            #endregion
+            #region Hiragana
+            string sHiraganaCSV = "あ,い,う,え,お,か,き,く,け,こ,さ,し,す,せ,そ,た,ち,つ,て,と,な,に,ぬ,ね,の,は,ひ,ふ,へ,ほ,ま,み,む,め,も,や,ゆ,よ,ら,り,る,れ,ろ,わ,を,ん";
+            string[] aHiragana = sHiraganaCSV.Split(',');
+            if(aRomaji.Count() == aHiragana.Count())
             {
-
-                var recognitionResults = await inkRecognizerContainer.RecognizeAsync(Gana.InkPresenter.StrokeContainer, InkRecognitionTarget.All);
-
-                if (recognitionResults.Count > 0)
+                for (int i = 0; i < sRomajiCSV.Split(',').Count(); i++)
                 {
-                    // Display recognition result
-                    string str = "";
-                    foreach (var r in recognitionResults)
-                    {
-                        str += r.GetTextCandidates()[0];
-                    }
-                    preview.Text = str;
+                    Character new_character = new Character(aHiragana[i], aRomaji[i]);
+                    Hiragana.Add(new_character);
                 }
             }
 
+            string jsonhiragana = JsonConvert.SerializeObject(Hiragana);
+            #endregion
+            #region Katagana
+            string sKataganaCSV = "ア,イ,ウ,エ,オ,カ,キ,ク,ケ,コ,サ,シ,ス,セ,ソ,タ,チ,ツ,テ,ト,ナ,ニ,ヌ,ネ,ノ,ハ,ヒ,フ,ヘ,ホ,マ,ミ,ム,メ,モ,ヤ,ユ,ヨ,ラ,リ,ル,レ,ロ,ワ,ヲ,ン";
+            string[] aKatagana = sKataganaCSV.Split(',');
+            if (aRomaji.Count() == aKatagana.Count())
+            {
+                for (int i = 0; i < sRomajiCSV.Split(',').Count(); i++)
+                {
+                    Character new_character = new Character(aKatagana[i], aRomaji[i]);
+                    Katagana.Add(new_character);
+                }
+            }
+            string jsonkatagana = JsonConvert.SerializeObject(Katagana);
+            #endregion
+            
+            File.WriteAllText(Directory.GetCurrentDirectory() + @"/kata", jsonkatagana);
+            File.WriteAllText(Directory.GetCurrentDirectory() + @"/hira", jsonhiragana);
         }
 
 
